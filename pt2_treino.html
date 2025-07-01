@@ -28,37 +28,54 @@
         });
 
         async function treinar() {
-            const xs = [];
-            const ys = [];
+            const xs = []; // Lista para armazenar os dados de entrada (landmarks das mãos)
+            const ys = []; // Lista para armazenar os rótulos (índice da letra)
 
+            // Extrai e ordena as letras únicas do dataset
             const letras = [...new Set(dataset.map(d => d.label))].sort();
+
+            // Função auxiliar para obter o índice de uma letra
             const letraIndex = letra => letras.indexOf(letra);
 
+            // Popula xs com landmarks e ys com os índices das letras
             dataset.forEach(d => {
-                xs.push(d.landmarks);
-                ys.push(letraIndex(d.label));
+                xs.push(d.landmarks); // 21 pontos * 3 coordenadas = 63 valores
+                ys.push(letraIndex(d.label)); // Converte rótulo (letra) para índice
             });
 
-            const X = tf.tensor2d(xs);
-            const Y = tf.oneHot(tf.tensor1d(ys, "int32"), letras.length);
+            // Converte os dados para tensores TensorFlow
+            const X = tf.tensor2d(xs); // Tensores de entrada (shape: [N, 63])
+            const Y = tf.oneHot(tf.tensor1d(ys, "int32"), letras.length); // One-hot dos rótulos
 
+            // Define a arquitetura do modelo sequencial
             const model = tf.sequential();
-            model.add(tf.layers.dense({ units: 128, inputShape: [63], activation: 'relu' }));
-            model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
-            model.add(tf.layers.dense({ units: letras.length, activation: 'softmax' }));
+            model.add(tf.layers.dense({ units: 128, inputShape: [63], activation: 'relu' })); // Camada oculta 1
+            model.add(tf.layers.dense({ units: 64, activation: 'relu' })); // Camada oculta 2
+            model.add(tf.layers.dense({ units: letras.length, activation: 'softmax' })); // Saída com número de classes (letras)
 
-            model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
+            // Compila o modelo com otimizador Adam e função de perda categórica
+            model.compile({
+                optimizer: 'adam',
+                loss: 'categoricalCrossentropy',
+                metrics: ['accuracy']
+            });
 
+            // Mostra no console que o treinamento começou
             log("Treinando modelo...");
+
+            // Treina o modelo com 50 épocas, validação de 20% e batch size de 16
             await model.fit(X, Y, {
                 epochs: 50,
                 batchSize: 16,
                 validationSplit: 0.2,
                 callbacks: {
-                    onEpochEnd: (epoch, logs) => log(`Época ${epoch + 1}: loss=${logs.loss.toFixed(4)}, acc=${(logs.acc * 100).toFixed(2)}%`)
+                    // Mostra o progresso a cada época
+                    onEpochEnd: (epoch, logs) =>
+                        log(`Época ${epoch + 1}: loss=${logs.loss.toFixed(4)}, acc=${(logs.acc * 100).toFixed(2)}%`)
                 }
             });
 
+            // Salva o modelo treinado como arquivo para download
             await model.save('downloads://modelo_libras');
             log("Modelo treinado e salvo.");
         }

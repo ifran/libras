@@ -51,7 +51,7 @@
     <script>
         let model, letras;
 
-        const palavrasDoJogo = ["GUSTAVO", "JENIFER", "LETICIA"];
+        const palavrasDoJogo = ["FABIO", "JENIFER", "LETICIA"];
         let indicePalavraAtual = 0;
         let letraIndex = 0;
         let letrasAcertadas = "";
@@ -84,60 +84,83 @@
         let podeDetectar = true;
 
         hands.onResults(results => {
+            // Salva o estado atual do canvas
             canvasCtx.save();
+
+            // Limpa o canvas anterior
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // Desenha a imagem da câmera no canvas
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
+            // Verifica se há landmarks de mão detectados e se o modelo está carregado
             if (results.multiHandLandmarks.length > 0 && model) {
+                // Pega os pontos (landmarks) da primeira mão detectada
                 const landmarks = results.multiHandLandmarks[0];
+
+                // Converte os pontos em um array plano [x1, y1, z1, x2, y2, z2, ...]
                 const flat = landmarks.flatMap(p => [p.x, p.y, p.z]);
+
+                // Cria um tensor 2D com os dados para enviar ao modelo
                 const input = tf.tensor2d([flat]);
 
+                // Faz a predição da letra com base no modelo treinado
                 const prediction = model.predict(input);
-                prediction.array().then(arr => {
-                    const probs = arr[0];
-                    const maxProb = Math.max(...probs);
-                    const index = probs.indexOf(maxProb);
 
+                // Converte a predição para um array para analisar as probabilidades
+                prediction.array().then(arr => {
+                    const probs = arr[0]; // Array com a probabilidade de cada letra
+                    const maxProb = Math.max(...probs); // Maior probabilidade
+                    const index = probs.indexOf(maxProb); // Índice da letra com maior probabilidade
+
+                    // Se a predição for confiável (acima de 80%) e puder detectar
                     if (maxProb > 0.8 && podeDetectar) {
-                        const letra = letras[index];
-                        const letraEsperada = palavrasDoJogo[indicePalavraAtual][letraIndex];
+                        const letra = letras[index]; // Letra detectada
+                        const letraEsperada = palavrasDoJogo[indicePalavraAtual][letraIndex]; // Letra correta da palavra atual
 
                         console.log('letra')
                         console.log(letra)
 
+                        // Se a letra está correta e não é repetida da última
                         if (letra === letraEsperada && letra !== ultimaLetra) {
-                            letrasAcertadas += letra;
-                            letraIndex++;
-                            ultimaLetra = letra;
-                            mostrarPalavra(letrasAcertadas);
+                            letrasAcertadas += letra; // Acumula a letra correta
+                            letraIndex++; // Avança o índice da letra
+                            ultimaLetra = letra; // Atualiza a última letra detectada
+                            mostrarPalavra(letrasAcertadas); // Mostra as letras já acertadas
 
-                            // Avança para a próxima letra ou próxima palavra
+                            // Se terminou a palavra, espera 1.5s e avança para a próxima
                             if (letraIndex >= palavrasDoJogo[indicePalavraAtual].length) {
                                 setTimeout(() => {
                                     avancarPalavra();
                                 }, 1500);
                             } else {
+                                // Caso contrário, mostra a próxima letra a ser feita
                                 mostrarProximaLetra();
                             }
 
+                            // Impede nova detecção por 1 segundo para evitar repetições
                             podeDetectar = false;
                             setTimeout(() => {
                                 podeDetectar = true;
                             }, 1000);
                         }
                     } else if (maxProb <= 0.8) {
+                        // Se a predição não foi confiável, limpa a última letra
                         ultimaLetra = null;
                     }
                 });
 
+                // Libera a memória do tensor
                 input.dispose();
             } else {
+                // Se nenhuma mão for detectada, zera a última letra
                 ultimaLetra = null;
             }
 
+            // Restaura o estado anterior do canvas
             canvasCtx.restore();
         });
+
 
         function mostrarPalavra(texto) {
             document.getElementById("letra").textContent = texto;

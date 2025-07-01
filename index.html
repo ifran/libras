@@ -30,65 +30,82 @@
     <div id="capturas"></div>
 
     <script>
+        // Seleciona o elemento de vídeo onde a câmera será exibida
         const videoElement = document.querySelector('.input_video');
+
+        // Inicializa o MediaPipe Hands, indicando de onde carregar os arquivos
         const hands = new Hands({
             locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
+        // Define as opções do modelo de detecção de mãos
         hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.7
+            maxNumHands: 1,               // Detecta no máximo uma mão
+            modelComplexity: 1,           // Modelo intermediário: equilíbrio entre precisão e performance
+            minDetectionConfidence: 0.7,  // Confiança mínima para detectar uma mão
+            minTrackingConfidence: 0.7    // Confiança mínima para continuar rastreando
         });
 
+        // Array onde serão armazenados os dados coletados (letra e landmarks)
         let dataset = [];
 
+        // Quando o modelo detectar uma mão, atualiza os pontos da mão atual
         hands.onResults(results => {
             if (results.multiHandLandmarks.length > 0) {
-                currentLandmarks = results.multiHandLandmarks[0];
+                currentLandmarks = results.multiHandLandmarks[0]; // Pega os 21 pontos da primeira mão
             }
         });
 
+        // Inicializa a câmera usando MediaPipe Camera, enviando frames ao modelo
         const camera = new Camera(videoElement, {
             onFrame: async () => {
-                await hands.send({ image: videoElement });
+                await hands.send({ image: videoElement }); // Envia o frame atual da câmera para o modelo
             },
             width: 640,
             height: 480
         });
-        camera.start();
+        camera.start(); // Inicia a câmera
 
+        // Variável que guarda os pontos da mão detectada no momento
         let currentLandmarks = null;
 
-        // Coleta os pontos ao pressionar uma tecla
+        // Captura os pontos ao pressionar uma tecla (A–Z)
         document.addEventListener("keydown", (e) => {
-            if (!currentLandmarks) return;
+            if (!currentLandmarks) return; // Se não há mão detectada, ignora
 
-            const letra = e.key.toUpperCase();
-            if (!letra.match(/^[A-Z]$/)) return;
+            const letra = e.key.toUpperCase(); // Converte a tecla para maiúscula
+            if (!letra.match(/^[A-Z]$/)) return; // Ignora se não for uma letra (A-Z)
 
+            // Achata os pontos (x, y, z) de cada um dos 21 landmarks em um array de 63 posições
             const flatLandmarks = currentLandmarks.flatMap(p => [p.x, p.y, p.z]);
 
+            // Adiciona uma nova amostra ao dataset
             dataset.push({
                 label: letra,
                 landmarks: flatLandmarks
             });
 
-            document.getElementById("capturas").innerHTML = `<br>Capturado: ${letra} (${dataset.length} amostras)` + document.getElementById("capturas").innerHTML;
+            // Atualiza a tela mostrando a captura feita
+            document.getElementById("capturas").innerHTML =
+                `<br>Capturado: ${letra} (${dataset.length} amostras)` +
+                document.getElementById("capturas").innerHTML;
         });
 
-        // Exporta os dados com tecla S
+        // Exporta os dados quando a tecla "1" for pressionada
         document.addEventListener("keydown", (e) => {
             if (e.key === "1") {
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataset));
+                // Converte os dados para JSON e cria um link para download
+                const dataStr = "data:text/json;charset=utf-8," +
+                    encodeURIComponent(JSON.stringify(dataset));
                 const a = document.createElement('a');
                 a.href = dataStr;
                 a.download = "dados_libras.json";
-                a.click();
+                a.click(); // Inicia o download
+
                 console.log("Arquivo exportado.");
             }
         });
+
     </script>
 </body>
 
