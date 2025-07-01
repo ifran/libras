@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Treinamento Modelo Libras</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.13.0/dist/tf.min.js"></script>
+</head>
+
+<body>
+    <h3>Treinar modelo de reconhecimento de letras em Libras</h3>
+    <input type="file" id="inputFile" />
+    <button onclick="treinar()">Treinar Modelo</button>
+    <div><a href="./pt3_reconhecimento.html">Próxima Etapa</a></div>
+
+    <pre id="log"></pre>
+
+    <script>
+        let dataset = [];
+
+        document.getElementById("inputFile").addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                dataset = JSON.parse(e.target.result);
+                log(`Amostras carregadas: ${dataset.length}`);
+            };
+            reader.readAsText(file);
+        });
+
+        async function treinar() {
+            const xs = [];
+            const ys = [];
+
+            const letras = [...new Set(dataset.map(d => d.label))].sort();
+            const letraIndex = letra => letras.indexOf(letra);
+
+            dataset.forEach(d => {
+                xs.push(d.landmarks);
+                ys.push(letraIndex(d.label));
+            });
+
+            const X = tf.tensor2d(xs);
+            const Y = tf.oneHot(tf.tensor1d(ys, "int32"), letras.length);
+
+            const model = tf.sequential();
+            model.add(tf.layers.dense({ units: 128, inputShape: [63], activation: 'relu' }));
+            model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
+            model.add(tf.layers.dense({ units: letras.length, activation: 'softmax' }));
+
+            model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
+
+            log("Treinando modelo...");
+            await model.fit(X, Y, {
+                epochs: 50,
+                batchSize: 16,
+                validationSplit: 0.2,
+                callbacks: {
+                    onEpochEnd: (epoch, logs) => log(`Época ${epoch + 1}: loss=${logs.loss.toFixed(4)}, acc=${(logs.acc * 100).toFixed(2)}%`)
+                }
+            });
+
+            await model.save('downloads://modelo_libras');
+            log("Modelo treinado e salvo.");
+        }
+
+        function log(msg) {
+            document.getElementById("log").textContent += msg + "\n";
+        }
+    </script>
+</body>
+
+</html>

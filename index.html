@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Coleta de Dados - Libras</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <style>
+        .input_video,
+        .output_canvas {
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+
+<body>
+    <h3>Pressione uma tecla (ex: A, B, C...) para registrar a posição da mão com a letra</h3>
+    <div><a href="./pt2_treino.html">Próxima Etapa</a></div>
+
+    <div style="display: flex">
+        <div>
+            <video class="input_video" autoplay></video>
+        </div>
+        <div>
+            <img style="width: 48vw; height: 48vh;" src="./alfabeto.png" alt="">
+        </div>
+    </div>
+
+    <div id="capturas"></div>
+
+    <script>
+        const videoElement = document.querySelector('.input_video');
+        const hands = new Hands({
+            locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        let dataset = [];
+
+        hands.onResults(results => {
+            if (results.multiHandLandmarks.length > 0) {
+                currentLandmarks = results.multiHandLandmarks[0];
+            }
+        });
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start();
+
+        let currentLandmarks = null;
+
+        // Coleta os pontos ao pressionar uma tecla
+        document.addEventListener("keydown", (e) => {
+            if (!currentLandmarks) return;
+
+            const letra = e.key.toUpperCase();
+            if (!letra.match(/^[A-Z]$/)) return;
+
+            const flatLandmarks = currentLandmarks.flatMap(p => [p.x, p.y, p.z]);
+
+            dataset.push({
+                label: letra,
+                landmarks: flatLandmarks
+            });
+
+            document.getElementById("capturas").innerHTML = `<br>Capturado: ${letra} (${dataset.length} amostras)` + document.getElementById("capturas").innerHTML;
+        });
+
+        // Exporta os dados com tecla S
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "1") {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataset));
+                const a = document.createElement('a');
+                a.href = dataStr;
+                a.download = "dados_libras.json";
+                a.click();
+                console.log("Arquivo exportado.");
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Reconhecimento de Letras em Libras</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.13.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <style>
+        video,
+        canvas {
+            position: absolute;
+            width: 640px;
+            height: 480px;
+        }
+
+        #letra {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 48px;
+            color: red;
+        }
+
+        .input_video,
+        .output_canvas {
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="letra">-</div>
+    <br>
+    <br>
+    <br>
+    <button onclick="limparPalavra()">Limpar</button>
+    <br>
+    <br>
+
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100vw;">
+        <div>
+            <video class="input_video" autoplay muted></video>
+            <canvas class="output_canvas"></canvas>
+        </div>
+        <div>
+            <img style="width: 48vw; height: 48vh; right: inherit;" src="./alfabeto.png" alt="">
+        </div>
+    </div>
+
+    <script>
+        let model, letras;
+
+        const palavrasDoJogo = ["GUSTAVO", "JENIFER", "LETICIA"];
+        let indicePalavraAtual = 0;
+        let letraIndex = 0;
+        let letrasAcertadas = "";
+
+        async function carregarModelo() {
+            model = await tf.loadLayersModel('./modelo/modelo_libras.json');
+            letras = [..."ABCDEFGIJLMNOPQRSTUVXZ"];
+            console.log("Modelo carregado.");
+            mostrarProximaLetra();
+        }
+
+        carregarModelo();
+
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        let ultimaLetra = null;
+        let podeDetectar = true;
+
+        hands.onResults(results => {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiHandLandmarks.length > 0 && model) {
+                const landmarks = results.multiHandLandmarks[0];
+                const flat = landmarks.flatMap(p => [p.x, p.y, p.z]);
+                const input = tf.tensor2d([flat]);
+
+                const prediction = model.predict(input);
+                prediction.array().then(arr => {
+                    const probs = arr[0];
+                    const maxProb = Math.max(...probs);
+                    const index = probs.indexOf(maxProb);
+
+                    if (maxProb > 0.8 && podeDetectar) {
+                        const letra = letras[index];
+                        const letraEsperada = palavrasDoJogo[indicePalavraAtual][letraIndex];
+
+                        console.log('letra')
+                        console.log(letra)
+
+                        if (letra === letraEsperada && letra !== ultimaLetra) {
+                            letrasAcertadas += letra;
+                            letraIndex++;
+                            ultimaLetra = letra;
+                            mostrarPalavra(letrasAcertadas);
+
+                            // Avança para a próxima letra ou próxima palavra
+                            if (letraIndex >= palavrasDoJogo[indicePalavraAtual].length) {
+                                setTimeout(() => {
+                                    avancarPalavra();
+                                }, 1500);
+                            } else {
+                                mostrarProximaLetra();
+                            }
+
+                            podeDetectar = false;
+                            setTimeout(() => {
+                                podeDetectar = true;
+                            }, 1000);
+                        }
+                    } else if (maxProb <= 0.8) {
+                        ultimaLetra = null;
+                    }
+                });
+
+                input.dispose();
+            } else {
+                ultimaLetra = null;
+            }
+
+            canvasCtx.restore();
+        });
+
+        function mostrarPalavra(texto) {
+            document.getElementById("letra").textContent = texto;
+        }
+
+        function mostrarProximaLetra() {
+            const letra = palavrasDoJogo[indicePalavraAtual][letraIndex];
+            document.getElementById("letra").textContent = `${letrasAcertadas}_ ← faça a letra ${letra}`;
+        }
+
+        function avancarPalavra() {
+            indicePalavraAtual++;
+            letraIndex = 0;
+            letrasAcertadas = "";
+
+            if (indicePalavraAtual >= palavrasDoJogo.length) {
+                document.getElementById("letra").textContent = "Parabéns! Jogo concluído 🎉";
+            } else {
+                mostrarProximaLetra();
+            }
+        }
+
+        function limparPalavra() {
+            letrasAcertadas = "";
+            letraIndex = 0;
+            mostrarProximaLetra();
+        }
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+
+        camera.start();
+    </script>
+
+</body>
+
+</html>
